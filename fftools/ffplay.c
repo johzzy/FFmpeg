@@ -1098,6 +1098,57 @@ static inline int compute_mod(int a, int b)
     return a < 0 ? a%b + b : a%b;
 }
 
+typedef int (*colorful_wave_fn)(int x, int y, int w, int h);
+static const int colorful_wave_kColorDepth = 256;
+static int colorful_wave_fn0(int x, int y, int w, int h) { return 255; }
+static int colorful_wave_fn1(int x, int y, int w, int h) {
+  return x * colorful_wave_kColorDepth / w;
+}
+static int colorful_wave_fn2(int x, int y, int w, int h) {
+  return y * colorful_wave_kColorDepth / h;
+}
+static int colorful_wave_fn3(int x, int y, int w, int h) {
+  int sum = pow((x - (w >> 1)), 2) + pow((y - (h >> 1)), 2);
+  int size = (w * w + h * h) >> 2;
+  return sqrt(sum) * colorful_wave_kColorDepth / sqrt(size);
+}
+static colorful_wave_fn colorful_wave_fn_array[] = {
+    &colorful_wave_fn1,
+    &colorful_wave_fn2,
+    &colorful_wave_fn3,
+};
+static const size_t colorful_wave_fn_size =
+    sizeof(colorful_wave_fn_array) / sizeof(colorful_wave_fn);
+static size_t colorful_wave_fn_count = 0;
+static size_t colorful_wave_fn_index = 0;
+static void colorful_wave_switch() {
+  colorful_wave_fn_count =
+    (colorful_wave_fn_count + 1) % (colorful_wave_fn_size + 1);
+  if (colorful_wave_fn_count != colorful_wave_fn_size) {
+    ++colorful_wave_fn_index;
+  }
+}
+static colorful_wave_fn colorful_wave_call() {
+  if (colorful_wave_fn_count == colorful_wave_fn_size) {
+    return &colorful_wave_fn0;
+  } else {
+    colorful_wave_fn_index = (colorful_wave_fn_index + 1) % colorful_wave_fn_size;
+    return colorful_wave_fn_array[colorful_wave_fn_index];
+  }
+}
+
+static void fill_colorful_vertical_line(int x, int y1, int delta) {
+  int y = y1 + delta;
+  SDL_Rect rect = {.x = x, .y = FFMIN(y, y1), .w = 1, .h = abs(delta)};
+  if (delta) {
+    int r = colorful_wave_call()(x, y, screen_width, screen_height);
+    int g = colorful_wave_call()(x, y, screen_width, screen_height);
+    int b = colorful_wave_call()(x, y, screen_width, screen_height);
+    SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+    SDL_RenderFillRect(renderer, &rect);
+  }
+}
+
 static void video_audio_display(VideoState *s)
 {
     int i, i_start, x, y1, y, ys, delay, n, nb_display_channels;
@@ -1163,13 +1214,7 @@ static void video_audio_display(VideoState *s)
             y1 = s->ytop + ch * h + (h / 2); /* position of center line */
             for (x = 0; x < s->width; x++) {
                 y = (s->sample_array[i] * h2) >> 15;
-                if (y < 0) {
-                    y = -y;
-                    ys = y1 - y;
-                } else {
-                    ys = y1;
-                }
-                fill_rectangle(s->xleft + x, ys, 1, y);
+                fill_colorful_vertical_line(s->xleft + x, y1, y);
                 i += channels;
                 if (i >= SAMPLE_ARRAY_SIZE)
                     i -= SAMPLE_ARRAY_SIZE;
@@ -3387,6 +3432,9 @@ static void toggle_audio_display(VideoState *is)
     if (is->show_mode != next) {
         is->force_refresh = 1;
         is->show_mode = next;
+    }
+    if (is->show_mode == SHOW_MODE_WAVES) {
+        colorful_wave_switch();
     }
 }
 
