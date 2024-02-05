@@ -1100,7 +1100,6 @@ static inline int compute_mod(int a, int b)
 
 typedef int (*colorful_wave_fn)(int x, int y, int w, int h);
 static const int colorful_wave_kColorDepth = 256;
-static int colorful_wave_fn0(int x, int y, int w, int h) { return 255; }
 static int colorful_wave_fn1(int x, int y, int w, int h) {
   return x * colorful_wave_kColorDepth / w;
 }
@@ -1121,32 +1120,33 @@ static const size_t colorful_wave_fn_size =
     sizeof(colorful_wave_fn_array) / sizeof(colorful_wave_fn);
 static size_t colorful_wave_fn_count = 0;
 static size_t colorful_wave_fn_index = 0;
-static void colorful_wave_switch() {
+static void colorful_wave_switch(void) {
   colorful_wave_fn_count =
-    (colorful_wave_fn_count + 1) % (colorful_wave_fn_size + 1);
+    ++colorful_wave_fn_count % (colorful_wave_fn_size + 1);
   if (colorful_wave_fn_count != colorful_wave_fn_size) {
     ++colorful_wave_fn_index;
   }
 }
-static colorful_wave_fn colorful_wave_call() {
+static int colorful_wave_call(int x, int y, int w, int h) {
   if (colorful_wave_fn_count == colorful_wave_fn_size) {
-    return &colorful_wave_fn0;
-  } else {
-    colorful_wave_fn_index = (colorful_wave_fn_index + 1) % colorful_wave_fn_size;
-    return colorful_wave_fn_array[colorful_wave_fn_index];
+      return 255;
   }
+
+  colorful_wave_fn_index = ++colorful_wave_fn_index % colorful_wave_fn_size;
+  return colorful_wave_fn_array[colorful_wave_fn_index](x, y, w, h);
 }
 
 static void fill_colorful_vertical_line(int x, int y1, int delta) {
+  if (delta == 0) {
+    return;
+  }
   int y = y1 + delta;
   SDL_Rect rect = {.x = x, .y = FFMIN(y, y1), .w = 1, .h = abs(delta)};
-  if (delta) {
-    int r = colorful_wave_call()(x, y, screen_width, screen_height);
-    int g = colorful_wave_call()(x, y, screen_width, screen_height);
-    int b = colorful_wave_call()(x, y, screen_width, screen_height);
+    int r = colorful_wave_call(x, y, screen_width, screen_height);
+    int g = colorful_wave_call(x, y, screen_width, screen_height);
+    int b = colorful_wave_call(x, y, screen_width, screen_height);
     SDL_SetRenderDrawColor(renderer, r, g, b, 255);
     SDL_RenderFillRect(renderer, &rect);
-  }
 }
 
 static void video_audio_display(VideoState *s)
@@ -1203,6 +1203,7 @@ static void video_audio_display(VideoState *s)
     }
 
     if (s->show_mode == SHOW_MODE_WAVES) {
+        // VideoState::HackDrawWaves
         SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
         /* total height for one channel */
