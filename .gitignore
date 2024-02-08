@@ -43,6 +43,7 @@
 /checkasm_config_generated.asm
 /checkasm_config_generated.h
 /checkasm_header_config_generated.h
+/cmake/build
 /config.asm
 /config.h
 /config_components.asm
