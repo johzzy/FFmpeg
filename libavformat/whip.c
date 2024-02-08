@@ -659,6 +659,8 @@ static int generate_sdp_offer(AVFormatContext *s)
         if (whip->audio_par->codec_id == AV_CODEC_ID_OPUS)
             acodec_name = "opus";
 
+        switch (whip->flags) {
+        case kDtlsSrtpKeyAgreement:
         av_bprintf(&bp, ""
             "m=audio 9 UDP/TLS/RTP/SAVPF %u\r\n"
             "c=IN IP4 0.0.0.0\r\n"
@@ -684,7 +686,9 @@ static int generate_sdp_offer(AVFormatContext *s)
             whip->audio_par->ch_layout.nb_channels,
             whip->audio_ssrc,
             whip->audio_ssrc);
+            break;
 
+        case kPlaintextAgreement:
         av_bprintf(&bp, ""
                         "m=audio 9 UDP/RTP %u\r\n"
                         "c=IN IP4 0.0.0.0\r\n"
@@ -710,6 +714,10 @@ static int generate_sdp_offer(AVFormatContext *s)
                    whip->audio_par->ch_layout.nb_channels,
                    whip->audio_ssrc,
                    whip->audio_ssrc);
+            break;
+
+        default: abort();
+        }
     }
 
     if (whip->video_par) {
@@ -721,6 +729,8 @@ static int generate_sdp_offer(AVFormatContext *s)
             profile &= (~AV_PROFILE_H264_CONSTRAINED);
         }
 
+        switch (whip->flags) {
+        case kDtlsSrtpKeyAgreement:
         av_bprintf(&bp, ""
             "m=video 9 UDP/TLS/RTP/SAVPF %u\r\n"
             "c=IN IP4 0.0.0.0\r\n"
@@ -750,7 +760,9 @@ static int generate_sdp_offer(AVFormatContext *s)
             level,
             whip->video_ssrc,
             whip->video_ssrc);
+                break;
 
+        case kPlaintextAgreement:
         av_bprintf(&bp, ""
                         "m=video 9 UDP/RTP %u\r\n"
                         "c=IN IP4 0.0.0.0\r\n"
@@ -780,6 +792,10 @@ static int generate_sdp_offer(AVFormatContext *s)
                    level,
                    whip->video_ssrc,
                    whip->video_ssrc);
+            break;
+
+        default: abort();
+        }
     }
 
     if (!av_bprint_is_complete(&bp)) {
