@@ -582,6 +582,21 @@ static int generate_sdp_offer(AVFormatContext *s)
     WHIPContext *whip = s->priv_data;
     int is_dtls_active = whip->flags & WHIP_DTLS_ACTIVE;
 
+    int audio_mid, video_mid, mid_counter = 0;
+    char* bundle = &whip->buf[32];
+    if (whip->audio_par) {
+        audio_mid = mid_counter++;
+        bundle[2*mid_counter - 2] = ('0' + audio_mid);
+        bundle[2*mid_counter - 1] = ' ';
+    }
+    if (whip->video_par) {
+        video_mid = mid_counter++;
+        bundle[2*mid_counter - 2] = ('0' + video_mid);
+        bundle[2*mid_counter - 1] = ' ';
+    }
+    assert(whip->audio_par || whip->video_par);
+    bundle[2*mid_counter - 1] = 0;
+
     /* To prevent a crash during cleanup, always initialize it. */
     av_bprint_init(&bp, 1, MAX_SDP_SIZE);
 
@@ -610,11 +625,11 @@ static int generate_sdp_offer(AVFormatContext *s)
         "o=FFmpeg %s 2 IN IP4 %s\r\n"
         "s=FFmpegPublishSession\r\n"
         "t=0 0\r\n"
-        "a=group:BUNDLE 0 1\r\n"
+        "a=group:BUNDLE %s\r\n"
         "a=extmap-allow-mixed\r\n"
         "a=msid-semantic: WMS\r\n",
         WHIP_SDP_SESSION_ID,
-        WHIP_SDP_CREATOR_IP);
+        WHIP_SDP_CREATOR_IP, bundle);
 
     if (whip->audio_par) {
         if (whip->audio_par->codec_id == AV_CODEC_ID_OPUS)
@@ -627,7 +642,7 @@ static int generate_sdp_offer(AVFormatContext *s)
             "a=ice-pwd:%s\r\n"
             "a=fingerprint:sha-256 %s\r\n"
             "a=setup:%s\r\n"
-            "a=mid:0\r\n"
+            "a=mid:%d\r\n"
             "a=sendonly\r\n"
             "a=msid:FFmpeg audio\r\n"
             "a=rtcp-mux\r\n"
@@ -639,6 +654,7 @@ static int generate_sdp_offer(AVFormatContext *s)
             whip->ice_pwd_local,
             whip->dtls_fingerprint,
             is_dtls_active ? "active" : "passive",
+            audio_mid,
             whip->audio_payload_type,
             acodec_name,
             whip->audio_par->sample_rate,
@@ -663,7 +679,7 @@ static int generate_sdp_offer(AVFormatContext *s)
             "a=ice-pwd:%s\r\n"
             "a=fingerprint:sha-256 %s\r\n"
             "a=setup:%s\r\n"
-            "a=mid:1\r\n"
+            "a=mid:%d\r\n"
             "a=sendonly\r\n"
             "a=msid:FFmpeg video\r\n"
             "a=rtcp-mux\r\n"
@@ -682,6 +698,7 @@ static int generate_sdp_offer(AVFormatContext *s)
             whip->ice_pwd_local,
             whip->dtls_fingerprint,
             is_dtls_active ? "active" : "passive",
+            video_mid,
             whip->video_payload_type,
             vcodec_name,
             whip->video_payload_type,
