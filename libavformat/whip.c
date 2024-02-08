@@ -331,6 +331,8 @@ typedef struct WHIPContext {
     /* The certificate and private key used for DTLS handshake. */
     char* cert_file;
     char* key_file;
+
+    int flags;
 } WHIPContext;
 
 /**
@@ -415,6 +417,13 @@ end:
     return ret;
 }
 
+enum {
+    kDefault,
+    kDtlsSrtpKeyAgreement = kDefault,
+    kSdesSrtpKeyAgreement,
+    kPlaintextAgreement
+};
+
 /**
  * Initialize and check the options for the WebRTC muxer.
  */
@@ -427,7 +436,7 @@ static av_cold int initialize(AVFormatContext *s)
     whip->whip_starttime = av_gettime_relative();
 
     ret = certificate_key_init(s);
-    if (ret < 0) {
+    if (whip->flags == kDtlsSrtpKeyAgreement && ret < 0) {
         av_log(whip, AV_LOG_ERROR, "Failed to init certificate and key\n");
         return ret;
     }
@@ -698,6 +707,32 @@ static int generate_sdp_offer(AVFormatContext *s)
             whip->audio_par->ch_layout.nb_channels,
             whip->audio_ssrc,
             whip->audio_ssrc);
+
+        av_bprintf(&bp, ""
+                        "m=audio 9 UDP/RTP %u\r\n"
+                        "c=IN IP4 0.0.0.0\r\n"
+                        "a=ice-ufrag:%s\r\n"
+                        "a=ice-pwd:%s\r\n"
+                        //"a=fingerprint:sha-256 %s\r\n"
+                        "a=setup:passive\r\n"
+                        "a=mid:%d\r\n"
+                        "a=sendonly\r\n"
+                        "a=msid:FFmpeg audio\r\n"
+                        "a=rtcp-mux\r\n"
+                        "a=rtpmap:%u %s/%d/%d\r\n"
+                        "a=ssrc:%u cname:FFmpeg\r\n"
+                        "a=ssrc:%u msid:FFmpeg audio\r\n",
+                   whip->audio_payload_type,
+                   whip->ice_ufrag_local,
+                   whip->ice_pwd_local,
+                //whip->dtls_ctx.dtls_fingerprint,
+                   audio_mid,
+                   whip->audio_payload_type,
+                   acodec_name,
+                   whip->audio_par->sample_rate,
+                   whip->audio_par->ch_layout.nb_channels,
+                   whip->audio_ssrc,
+                   whip->audio_ssrc);
     }
 
     if (whip->video_par) {
@@ -750,6 +785,36 @@ static int generate_sdp_offer(AVFormatContext *s)
             whip->video_rtx_ssrc,
             whip->video_ssrc,
             whip->video_ssrc);
+
+        av_bprintf(&bp, ""
+                        "m=video 9 UDP/RTP %u\r\n"
+                        "c=IN IP4 0.0.0.0\r\n"
+                        "a=ice-ufrag:%s\r\n"
+                        "a=ice-pwd:%s\r\n"
+                        //"a=fingerprint:sha-256 %s\r\n"
+                        "a=setup:passive\r\n"
+                        "a=mid:%d\r\n"
+                        "a=sendonly\r\n"
+                        "a=msid:FFmpeg video\r\n"
+                        "a=rtcp-mux\r\n"
+                        "a=rtcp-rsize\r\n"
+                        "a=rtpmap:%u %s/90000\r\n"
+                        "a=fmtp:%u level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=%02x%02x%02x\r\n"
+                        "a=ssrc:%u cname:FFmpeg\r\n"
+                        "a=ssrc:%u msid:FFmpeg video\r\n",
+                   whip->video_payload_type,
+                   whip->ice_ufrag_local,
+                   whip->ice_pwd_local,
+                //whip->dtls_ctx.dtls_fingerprint,
+                   video_mid,
+                   whip->video_payload_type,
+                   vcodec_name,
+                   whip->video_payload_type,
+                   profile,
+                   profile_iop,
+                   level,
+                   whip->video_ssrc,
+                   whip->video_ssrc);
     }
 
     if (!av_bprint_is_complete(&bp)) {
@@ -1346,6 +1411,9 @@ next_packet:
 
         /* Handle the ICE binding response. */
         if (ice_is_binding_response(whip->buf, ret)) {
+            if (whip->flags == kPlaintextAgreement) {
+                whip->state = WHIP_STATE_DTLS_FINISHED;
+            }
             if (whip->state < WHIP_STATE_ICE_CONNECTED) {
                 if (whip->is_peer_ice_lite)
                     whip->state = WHIP_STATE_ICE_CONNECTED;
@@ -1518,6 +1586,7 @@ static int on_rtp_write_packet(void *opaque, const uint8_t *buf, int buf_size)
     if (!is_rtcp && payload_type != whip->video_payload_type && payload_type != whip->audio_payload_type)
         return 0;
 
+    assert(!is_rtcp);
     /* Get the corresponding SRTP context. */
     srtp = is_rtcp ? &whip->srtp_rtcp_send : (is_video? &whip->srtp_video_send : &whip->srtp_audio_send);
 
@@ -1531,6 +1600,34 @@ static int on_rtp_write_packet(void *opaque, const uint8_t *buf, int buf_size)
     ret = ffurl_write(whip->udp, whip->buf, cipher_size);
     if (ret < 0) {
         av_log(whip, AV_LOG_ERROR, "Failed to write packet=%dB, ret=%d\n", cipher_size, ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+static int on_rtp_write_packet_plaintext(void *opaque, uint8_t *buf, int buf_size)
+{
+    int ret, is_rtcp;
+    uint8_t payload_type;
+    AVFormatContext *s = opaque;
+    WHIPContext *whip = s->priv_data;
+
+    /* Ignore if not RTP or RTCP packet. */
+    if (!media_is_rtp_rtcp(buf, buf_size))
+        return 0;
+
+    /* Only support audio, video and rtcp. */
+    is_rtcp = media_is_rtcp(buf, buf_size);
+    payload_type = buf[1] & 0x7f;
+    if (!is_rtcp && payload_type != whip->video_payload_type && payload_type != whip->audio_payload_type)
+        return 0;
+
+    assert(!is_rtcp);
+
+    ret = ffurl_write(whip->udp_uc, buf, buf_size);
+    if (ret < 0) {
+        av_log(whip, AV_LOG_ERROR, "WHIP: Failed to write packet=%dB, ret=%d\n", buf_size, ret);
         return ret;
     }
 
@@ -1612,7 +1709,7 @@ static int create_rtp_muxer(AVFormatContext *s)
             goto end;
         }
 
-        rtp_ctx->pb = avio_alloc_context(buffer, buffer_size, 1, s, NULL, on_rtp_write_packet, NULL);
+        rtp_ctx->pb = avio_alloc_context(buffer, buffer_size, 1, s, NULL, whip->flags == kPlaintextAgreement ? on_rtp_write_packet_plaintext : on_rtp_write_packet, NULL);
         if (!rtp_ctx->pb) {
             ret = AVERROR(ENOMEM);
             goto end;
@@ -1806,6 +1903,7 @@ static av_cold int whip_init(AVFormatContext *s)
 {
     int ret;
     WHIPContext *whip = s->priv_data;
+    whip->flags = kPlaintextAgreement;
 
     if ((ret = initialize(s)) < 0)
         goto end;
@@ -1828,7 +1926,7 @@ static av_cold int whip_init(AVFormatContext *s)
     if ((ret = ice_dtls_handshake(s)) < 0)
         goto end;
 
-    if ((ret = setup_srtp(s)) < 0)
+    if (whip->flags != kPlaintextAgreement && (ret = setup_srtp(s)) < 0)
         goto end;
 
     if ((ret = create_rtp_muxer(s)) < 0)
