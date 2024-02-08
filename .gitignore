@@ -37,6 +37,7 @@
 /ffmpeg
 /ffplay
 /ffprobe
+/cmake/build
 /config.asm
 /config.h
 /config_components.asm
