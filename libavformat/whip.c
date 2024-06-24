@@ -37,6 +37,7 @@
 #include "libavutil/time.h"
 #include "libavutil/mem.h"
 #include "avc.h"
+#include "nal.h"
 #include "avio_internal.h"
 #include "http.h"
 #include "internal.h"
@@ -1297,7 +1298,7 @@ static int parse_profile_level(AVFormatContext *s, AVCodecParameters *par)
         if (r >= end)
             break;
 
-        r1 = ff_avc_find_startcode(r, end);
+        r1 = ff_nal_find_startcode(r, end);
         if ((state & 0x1f) == H264_NAL_SPS) {
             ret = ff_avc_decode_sps(sps, r, r1 - r);
             if (ret < 0) {
@@ -2325,7 +2326,7 @@ end:
  * NRI of the first NALU. Additionally, it uses the corresponding SRTP context to encrypt
  * the RTP packet, where the video packet is handled by the video SRTP context.
  */
-static int on_rtp_write_packet(void *opaque, uint8_t *buf, int buf_size)
+static int on_rtp_write_packet(void *opaque, const uint8_t *buf, int buf_size)
 {
     int ret, cipher_size, is_rtcp, is_video;
     uint8_t payload_type;
@@ -2364,7 +2365,7 @@ static int on_rtp_write_packet(void *opaque, uint8_t *buf, int buf_size)
     return ret;
 }
 
-static int on_rtp_write_packet_plaintext(void *opaque, uint8_t *buf, int buf_size)
+static int on_rtp_write_packet_plaintext(void *opaque, const uint8_t *buf, int buf_size)
 {
     int ret, is_rtcp;
     uint8_t payload_type;
@@ -2593,9 +2594,9 @@ static int h264_annexb_insert_sps_pps(AVFormatContext *s, AVPacket *pkt)
 
     /* Discover NALU type from packet. */
     buf_end  = pkt->data + pkt->size;
-    for (buf = ff_avc_find_startcode(pkt->data, buf_end); buf < buf_end; buf += nal_size) {
+    for (buf = ff_nal_find_startcode(pkt->data, buf_end); buf < buf_end; buf += nal_size) {
         while (!*(buf++));
-        r1 = ff_avc_find_startcode(buf, buf_end);
+        r1 = ff_nal_find_startcode(buf, buf_end);
         if ((nal_size = r1 - buf) > 0) {
             unit_type = *buf & 0x1f;
             if (unit_type == H264_NAL_SPS) {
@@ -2636,9 +2637,9 @@ static int h264_annexb_insert_sps_pps(AVFormatContext *s, AVPacket *pkt)
     memcpy(pkt->data, par->extradata, par->extradata_size);
     out = pkt->data + par->extradata_size;
     buf_end  = in->data + in->size;
-    for (buf = ff_avc_find_startcode(in->data, buf_end); buf < buf_end; buf += nal_size) {
+    for (buf = ff_nal_find_startcode(in->data, buf_end); buf < buf_end; buf += nal_size) {
         while (!*(buf++));
-        r1 = ff_avc_find_startcode(buf, buf_end);
+        r1 = ff_nal_find_startcode(buf, buf_end);
         if ((nal_size = r1 - buf) > 0) {
             AV_WB24(out, 0x00001);
             memcpy(out + 3, buf, nal_size);
