@@ -1622,7 +1622,7 @@ static int on_rtp_write_packet(void *opaque, const uint8_t *buf, int buf_size)
     return ret;
 }
 
-static int on_rtp_write_packet_plaintext(void *opaque, uint8_t *buf, int buf_size)
+static int on_rtp_write_packet_plaintext(void *opaque, const uint8_t *buf, int buf_size)
 {
     int ret, is_rtcp;
     uint8_t payload_type;
