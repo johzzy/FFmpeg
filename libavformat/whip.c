@@ -1284,7 +1284,7 @@ static int parse_profile_level(AVFormatContext *s, AVCodecParameters *par)
     if (par->codec_id != AV_CODEC_ID_H264)
         return ret;
 
-    if (par->profile != FF_PROFILE_UNKNOWN && par->level != FF_LEVEL_UNKNOWN)
+    if (par->profile != AV_PROFILE_UNKNOWN && par->level != AV_LEVEL_UNKNOWN)
         return ret;
 
     if (!par->extradata || par->extradata_size <= 0) {
@@ -1372,11 +1372,11 @@ static int parse_codec(AVFormatContext *s)
                 return AVERROR(EINVAL);
             }
 
-            if (par->profile == FF_PROFILE_UNKNOWN) {
+            if (par->profile == AV_PROFILE_UNKNOWN) {
                 av_log(whip, AV_LOG_WARNING, "WHIP: No profile found in extradata, consider baseline\n");
                 return AVERROR(EINVAL);
             }
-            if (par->level == FF_LEVEL_UNKNOWN) {
+            if (par->level == AV_LEVEL_UNKNOWN) {
                 av_log(whip, AV_LOG_WARNING, "WHIP: No level found in extradata, consider 3.1\n");
                 return AVERROR(EINVAL);
             }
@@ -1547,8 +1547,8 @@ static int generate_sdp_offer(AVFormatContext *s)
         level = whip->video_par->level;
         if (whip->video_par->codec_id == AV_CODEC_ID_H264) {
             vcodec_name = "H264";
-            profile_iop &= FF_PROFILE_H264_CONSTRAINED;
-            profile &= (~FF_PROFILE_H264_CONSTRAINED);
+            profile_iop &= AV_PROFILE_H264_CONSTRAINED;
+            profile &= (~AV_PROFILE_H264_CONSTRAINED);
         }
 
         switch (whip->flags) {
