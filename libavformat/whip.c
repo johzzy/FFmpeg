@@ -1610,7 +1610,6 @@ static int on_rtp_write_packet(void *opaque, const uint8_t *buf, int buf_size)
     if (!is_rtcp && payload_type != whip->video_payload_type && payload_type != whip->audio_payload_type)
         return 0;
 
-    assert(!is_rtcp);
     /* Get the corresponding SRTP context. */
     srtp = is_rtcp ? &whip->srtp_rtcp_send : (is_video? &whip->srtp_video_send : &whip->srtp_audio_send);
 
