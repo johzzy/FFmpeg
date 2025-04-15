@@ -1919,7 +1919,7 @@ static av_cold int whip_init(AVFormatContext *s)
 {
     int ret;
     WHIPContext *whip = s->priv_data;
-    whip->flags = kPlaintextAgreement;
+    whip->flags = kDtlsSrtpKeyAgreement;
 
     if ((ret = initialize(s)) < 0)
         goto end;
