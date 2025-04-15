@@ -1538,7 +1538,11 @@ static int generate_sdp_offer(AVFormatContext *s)
                    whip->audio_ssrc);
             break;
 
-        default: abort();
+        case  kSdesSrtpKeyAgreement:
+        default:
+            av_log(whip, AV_LOG_ERROR, "WHIP: SdesSrtpKeyAgreement Not implemented!\n");
+            assert(whip->flags != kSdesSrtpKeyAgreement);
+            break;
         }
     }
 
@@ -1616,7 +1620,11 @@ static int generate_sdp_offer(AVFormatContext *s)
                    whip->video_ssrc);
             break;
 
-        default: abort();
+        case kSdesSrtpKeyAgreement:
+        default:
+            av_log(whip, AV_LOG_ERROR, "WHIP: SdesSrtpKeyAgreement Not implemented!\n");
+            assert(whip->flags != kSdesSrtpKeyAgreement);
+            break;
         }
     }
 
