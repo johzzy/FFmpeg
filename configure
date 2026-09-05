@@ -4588,6 +4588,12 @@ for v in "$@"; do
     FFMPEG_CONFIGURATION="${FFMPEG_CONFIGURATION# } ${l}${r}"
 done
 
+esc(){
+    echo "$*" | sed 's/%/%25/g;s/:/%3a/g'
+}
+
+echo "config::::::$(esc $FFMPEG_CONFIGURATION)" > ffbuild/config.fate
+
 find_things_extern(){
     thing=$1
     pattern=$2
@@ -8588,10 +8594,6 @@ if test -n "$WARNINGS"; then
 fi
 
 test -e Makefile || echo "include $source_path/Makefile" > Makefile
-
-esc(){
-    echo "$*" | sed 's/%/%25/g;s/:/%3a/g'
-}
 
 echo "config:$arch:$subarch:$cpu:$target_os:$(esc $cc_ident):$(esc $FFMPEG_CONFIGURATION)" > ffbuild/config.fate
 
